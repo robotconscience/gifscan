@@ -4,7 +4,7 @@ Live slitscanning of animated gifs
 
 To use:
 
-* Drag this link to your bookmarks bar: [GIFscan](http://robotconscience.github.io/gifscan/bookmarklet/gifscan.min.js)
+* Go to [http://robotconscience.github.io/](http://robotconscience.github.io/) and grab the bookmarklet.
 * Find a gif you <3 in your browser
 * Right click on said gif, and click "open in a new tab" (or window, if that's how you roll)
 * Click your new bookmarklet
