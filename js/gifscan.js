@@ -54,7 +54,42 @@ if (!Function.prototype.bind) {
   
 	return fBound;  
   };  
-} 
+}
+
+// very hack-y gif parser!
+var GifParser = function (argument) {
+	this.frames = [];
+	var imagedata = null;
+	
+	// quick hack :/
+	function compareImages(img1,img2){
+	   if(img1.data.length != img2.data.length)
+	       return false;
+	   for(var i = 0; i < img1.data.length; ++i){
+	       if(img1.data[i] != img2.data[i])
+	           return false;
+	   }
+	   return true;   
+	}
+	this.load = function(url){
+		this.canvas = document.createElement("canvas");
+		this.imgElement = document.createElement('img');
+		this.imgElement.onload = this.parse.bind(this);
+		this.imgElement.id  = "gifscan_parse";
+		this.imgElement.src = url; // to-do: error checking!
+	}
+	this.parse = function(){
+		this.canvas.width = this.imgElement.width;
+		this.canvas.height = this.imgElement.height;
+		this.canvas.getContext("2d").drawImage( this.imgElement, 0, 0);
+		var id = this.canvas.getImageData(0,0,this.canvas.width, this.canvas.height);
+		if ( !compareImages(id, imagedata) ){
+			imagedata = id;
+			this.frames.push(id);
+		}
+		this.setTimeout(this.parse.bind(this), 0);
+	}
+}
 
 /**
  * @class GifScan
@@ -65,18 +100,23 @@ var GifScan = function(){
 }
 
 GifScan.prototype.load = function( src ) {
-	// see libgif.js for explanation of this part!
-	this.imgElement = document.createElement('img');
-	this.imgElement.onload = this.onLoaded.bind(this);
-	this.imgElement.setAttribute("rel:animated_src", src);
-	this.imgElement.setAttribute("rel:auto_play", "0");
-	this.imgElement.id  = "gifscan";
-	this.imgElement.src = src; // to-do: error checking!
-	document.body.appendChild(this.imgElement);
+	if ( src instanceof Image ){
+		this.imgElement = src;
+		this.onLoaded();
+	} else {
+		// see libgif.js for explanation of this part!
+		this.imgElement = document.createElement('img');
+		this.imgElement.onload = this.onLoaded.bind(this);
+		this.imgElement.setAttribute("rel:animated_src", src);
+		this.imgElement.setAttribute("rel:auto_play", "0");
+		this.imgElement.id  = "gifscan";
+		this.imgElement.src = src; // to-do: error checking!
+		document.body.appendChild(this.imgElement);
+	}
 };
 
 GifScan.prototype.onLoaded = function() {
-	this.parser = new SuperGif({ gif: this.imgElement } );
+	this.parser = new SuperGif({ gif: this.imgElement, auto_play: false } );
 	this.parser.load(this.onParsed.bind(this));
 	this.parser.get_canvas().style.visibility = "hidden";
 };

@@ -1,63 +1,3 @@
-/*
-	SuperGif
-
-	Example usage:
-
-		<img src="./example1_preview.gif" rel:animated_src="./example1.gif" width="360" height="360" rel:auto_play="1" />
-
-		<script type="text/javascript">
-			$$('img').each(function (img_tag) {
-				if (/.*\.gif/.test(img_tag.src)) {
-					var rub = new SuperGif({ gif: img_tag } );
-					rub.load();
-				}
-			});
-		</script>
-
-	Image tag attributes:
-
-		rel:animated_src -	If this url is specified, it's loaded into the player instead of src.
-							This allows a preview frame to be shown until animated gif data is streamed into the canvas
-
-		rel:auto_play -		Defaults to 1 if not specified. If set to zero, a call to the play() method is needed
-
-	Constructor options args
-
-		gif 				Required. The DOM element of an img tag.
-		auto_play 			Optional. Same as the rel:auto_play attribute above, this arg overrides the img tag info.
-		max_width			Optional. Scale images over max_width down to max_width. Helpful with mobile.
-
-	Instance methods
-
-		// loading
-		load( callback )	Loads the gif into a canvas element and then calls callback if one is passed
-
-		// play controls
-		play -				Start playing the gif
-		pause -				Stop playing the gif
-		move_to(i) -		Move to frame i of the gif
-		move_relative(i) -	Move i frames ahead (or behind if i < 0)
-
-		// getters
-		get_canvas			The canvas element that the gif is playing in. Handy for assigning event handlers to.
-		get_playing			Whether or not the gif is currently playing
-		get_loading			Whether or not the gif has finished loading/parsing
-		get_auto_play		Whether or not the gif is set to play automatically
-		get_length			The number of frames in the gif
-		get_current_frame	The index of the currently displayed frame of the gif
-
-		For additional customization (viewport inside iframe) these params may be passed:
-		c_w, c_h - width and height of canvas
-		vp_t, vp_l, vp_ w, vp_h - top, left, width and height of the viewport
-
-		A bonus: few articles to understand what is going on
-			http://enthusiasms.org/post/16976438906
-			http://www.matthewflickinger.com/lab/whatsinagif/bits_and_bytes.asp
-			http://humpy77.deviantart.com/journal/Frame-Delay-Times-for-Animated-GIFs-214150546
-
-*/
-
-// Generic functions
 var bitsToNum = function (ba) {
 	return ba.reduce(function (s, n) {
 		return s * 2 + n;
@@ -852,3 +792,200 @@ var SuperGif = function ( opts ) {
 	};	
 
 };
+
+if ( !window.getQueryString ) {
+	window.getQueryString = function(key, default_){
+		if (default_==null) default_=""; 
+		key = key.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+		var regex = new RegExp("[\\?&]"+key+"=([^&#]*)");
+		var qs = regex.exec(window.location.href);
+		if(qs == null)
+			return default_;
+		else
+			return qs[1];
+	}
+}
+
+if ( !window.requestAnimationFrame ) {
+	window.requestAnimationFrame = ( function() {
+		return window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame ||
+		window.oRequestAnimationFrame ||
+		window.msRequestAnimationFrame ||
+		function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+
+			window.setTimeout( callback, 1000 / 60 );
+
+		};
+	} )();
+}
+
+// add bind method for browsers that don't currently support it
+if (!Function.prototype.bind) {  
+  Function.prototype.bind = function (oThis) {  
+	if (typeof this !== "function") {  
+	  // closest thing possible to the ECMAScript 5 internal IsCallable function  
+	  throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");  
+	}  
+  
+	var aArgs = Array.prototype.slice.call(arguments, 1),   
+		fToBind = this,   
+		fNOP = function () {},  
+		fBound = function () {  
+		  return fToBind.apply(this instanceof fNOP  
+								 ? this  
+								 : oThis || window,  
+							   aArgs.concat(Array.prototype.slice.call(arguments)));  
+		};  
+  
+	fNOP.prototype = this.prototype;  
+	fBound.prototype = new fNOP();  
+  
+	return fBound;  
+  };  
+}
+
+// very hack-y gif parser!
+var GifParser = function (argument) {
+	this.frames = [];
+	var imagedata = null;
+	
+	// quick hack :/
+	function compareImages(img1,img2){
+	   if(img1.data.length != img2.data.length)
+	       return false;
+	   for(var i = 0; i < img1.data.length; ++i){
+	       if(img1.data[i] != img2.data[i])
+	           return false;
+	   }
+	   return true;   
+	}
+	this.load = function(url){
+		this.canvas = document.createElement("canvas");
+		this.imgElement = document.createElement('img');
+		this.imgElement.onload = this.parse.bind(this);
+		this.imgElement.id  = "gifscan_parse";
+		this.imgElement.src = url; // to-do: error checking!
+	}
+	this.parse = function(){
+		this.canvas.width = this.imgElement.width;
+		this.canvas.height = this.imgElement.height;
+		this.canvas.getContext("2d").drawImage( this.imgElement, 0, 0);
+		var id = this.canvas.getImageData(0,0,this.canvas.width, this.canvas.height);
+		if ( !compareImages(id, imagedata) ){
+			imagedata = id;
+			this.frames.push(id);
+		}
+		this.setTimeout(this.parse.bind(this), 0);
+	}
+}
+
+/**
+ * @class GifScan
+ */
+var GifScan = function(){
+	this.speed = 1; // increase 1 frame every frame!
+	this.play = true;
+}
+
+GifScan.prototype.load = function( src ) {
+	if ( src instanceof Image ){
+		this.imgElement = src;
+		this.onLoaded();
+	} else {
+		// see libgif.js for explanation of this part!
+		this.imgElement = document.createElement('img');
+		this.imgElement.onload = this.onLoaded.bind(this);
+		this.imgElement.setAttribute("rel:animated_src", src);
+		this.imgElement.setAttribute("rel:auto_play", "0");
+		this.imgElement.id  = "gifscan";
+		this.imgElement.src = src; // to-do: error checking!
+		document.body.appendChild(this.imgElement);
+	}
+};
+
+GifScan.prototype.onLoaded = function() {
+	this.parser = new SuperGif({ gif: this.imgElement, auto_play: false } );
+	this.parser.load(this.onParsed.bind(this));
+	this.parser.get_canvas().style.visibility = "hidden";
+};
+
+GifScan.prototype.onParsed = function() {
+	// supergif is done parsing!
+	this.scanCanvas = document.createElement("canvas");
+	this.scanCanvas.width = this.parser.get_canvas().width;
+	this.scanCanvas.height = this.parser.get_canvas().height;
+	this.scanCanvas.style.position = "absolute";
+	this.scanCanvas.style.left = "0px";
+	this.scanCanvas.style.top = "0px";
+	this.scanCanvas.style.width = "100%";
+	this.scanCanvas.style.height = "100%";
+	document.body.appendChild(this.scanCanvas);
+
+	// playback props
+	this.ctx = this.scanCanvas.getContext("2d");
+	this.gifCtx = this.parser.get_canvas().getContext("2d");
+	this.x = 0;
+	this.width = this.scanCanvas.width;
+	this.height = this.scanCanvas.height;
+	this.currentFrame = 0;
+	this.length = this.parser.get_length();
+	this.slice = this.ctx.createImageData(1,this.height);
+
+	if ( this.play ){
+		requestAnimationFrame(this.playingLoop.bind(this));
+	} else {
+		requestAnimationFrame(this.loop.bind(this));
+	}
+};
+
+GifScan.prototype.loop = function() {
+	// set image data based on current gif frame
+	var imageData = this.gifCtx.getImageData( this.x % this.width, 0, 1, this.scanCanvas.height );
+	this.ctx.putImageData(imageData, this.x % this.width, 0);//, this.x % this.width, 0, 1, this.scanCanvas.height);
+
+	// next frame in gif
+	this.currentFrame = ( this.currentFrame + this.speed ) % this.length;
+	this.parser.move_to( Math.floor( this.currentFrame ));
+	this.x++;
+
+	requestAnimationFrame(this.loop.bind(this));
+};
+
+GifScan.prototype.playingLoop = function() {
+	// set each slice based on steps
+	for ( var i=0; i<this.width; i++){
+		var curX = (i + this.x) % this.width;
+		var idx = parseInt(( i + this.currentFrame ) % this.length);
+		var data = this.parser.get_frames()[idx].data.data;
+		for (var y=0; y<this.height; y++){
+			var idx = (curX + y * this.width) * 4;
+			var sidx = y * 4;
+			this.slice.data[sidx + 0]	= data[idx + 0];
+			this.slice.data[sidx + 1]	= data[idx + 1];
+			this.slice.data[sidx + 2]	= data[idx + 2];
+			this.slice.data[sidx + 3]	= data[idx + 3];
+		}
+
+		this.ctx.putImageData( this.slice, i, 0);
+	}
+
+	// next frame in gif
+	this.currentFrame = ( this.currentFrame + this.speed ) % this.length;
+	// this.parser.move_to( Math.floor( this.currentFrame ));
+	//this.x++;
+
+	requestAnimationFrame(this.playingLoop.bind(this));
+};
+
+(function () {
+	var gifscan = new GifScan();
+	// loop through types on page!
+	var imgs = document.getElementsByTagName('img');
+	for ( var i=0; i<imgs.length; i++ ){
+		if ( imgs[i].src.indexOf("gif") != -1){
+			gifscan.load( imgs[i].src );
+			break;
+		}
+	}
+}) ();
