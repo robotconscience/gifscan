@@ -985,6 +985,8 @@ GifScan.prototype.playingLoop = function() {
 	for ( var i=0; i<imgs.length; i++ ){
 		if ( imgs[i].src.indexOf("gif") != -1){
 			gifscan.load( imgs[i].src );
+			var parent = imgs[i].parentNode;
+			parent.removeChild(imgs[i]);
 			break;
 		}
 	}
