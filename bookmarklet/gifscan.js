@@ -845,6 +845,64 @@ if (!Function.prototype.bind) {
   };  
 }
 
+/**
+ * Amazing description of gifscan.js goes here
+ */
+
+// UTILS!
+// 
+if ( !window.getQueryString ) {
+	window.getQueryString = function(key, default_){
+		if (default_==null) default_=""; 
+		key = key.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+		var regex = new RegExp("[\\?&]"+key+"=([^&#]*)");
+		var qs = regex.exec(window.location.href);
+		if(qs == null)
+			return default_;
+		else
+			return qs[1];
+	}
+}
+
+if ( !window.requestAnimationFrame ) {
+	window.requestAnimationFrame = ( function() {
+		return window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame ||
+		window.oRequestAnimationFrame ||
+		window.msRequestAnimationFrame ||
+		function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+
+			window.setTimeout( callback, 1000 / 60 );
+
+		};
+	} )();
+}
+
+// add bind method for browsers that don't currently support it
+if (!Function.prototype.bind) {  
+  Function.prototype.bind = function (oThis) {  
+	if (typeof this !== "function") {  
+	  // closest thing possible to the ECMAScript 5 internal IsCallable function  
+	  throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");  
+	}  
+  
+	var aArgs = Array.prototype.slice.call(arguments, 1),   
+		fToBind = this,   
+		fNOP = function () {},  
+		fBound = function () {  
+		  return fToBind.apply(this instanceof fNOP  
+								 ? this  
+								 : oThis || window,  
+							   aArgs.concat(Array.prototype.slice.call(arguments)));  
+		};  
+  
+	fNOP.prototype = this.prototype;  
+	fBound.prototype = new fNOP();  
+  
+	return fBound;  
+  };  
+}
+
 // very hack-y gif parser!
 var GifParser = function (argument) {
 	this.frames = [];
@@ -908,6 +966,13 @@ GifScan.prototype.onLoaded = function() {
 	this.parser = new SuperGif({ gif: this.imgElement, auto_play: false } );
 	this.parser.load(this.onParsed.bind(this));
 	this.parser.get_canvas().style.visibility = "hidden";
+	try {
+		var parent = this.imgElement.parentNode;
+		parent.removeChild(this.imgElement);
+	}
+	catch(e){
+
+	}
 };
 
 GifScan.prototype.onParsed = function() {
@@ -952,23 +1017,29 @@ GifScan.prototype.loop = function() {
 	requestAnimationFrame(this.loop.bind(this));
 };
 
+var logged = false;
+
 GifScan.prototype.playingLoop = function() {
 	// set each slice based on steps
+	var sc = this.length/this.width;
+	this.scanCanvas.width = this.scanCanvas.width;
 	for ( var i=0; i<this.width; i++){
 		var curX = (i + this.x) % this.width;
-		var idx = parseInt(( i + this.currentFrame ) % this.length);
+		var idx = parseInt(this.currentFrame + i) % this.length;
 		var data = this.parser.get_frames()[idx].data.data;
 		for (var y=0; y<this.height; y++){
-			var idx = (curX + y * this.width) * 4;
+			var ix = (curX + y * this.width) * 4;
 			var sidx = y * 4;
-			this.slice.data[sidx + 0]	= data[idx + 0];
-			this.slice.data[sidx + 1]	= data[idx + 1];
-			this.slice.data[sidx + 2]	= data[idx + 2];
-			this.slice.data[sidx + 3]	= data[idx + 3];
+			this.slice.data[sidx + 0]	= data[ix + 0];
+			this.slice.data[sidx + 1]	= data[ix + 1];
+			this.slice.data[sidx + 2]	= data[ix + 2];
+			this.slice.data[sidx + 3]	= data[ix + 3];
 		}
 
 		this.ctx.putImageData( this.slice, i, 0);
 	}
+
+	logged = true;
 
 	// next frame in gif
 	this.currentFrame = ( this.currentFrame + this.speed ) % this.length;
